@@ -1,0 +1,9 @@
+services:
+  app.response_listener:
+    class: ResponseListener
+    tags:
+      - kernel.event_listener(event=kernel.response, method=onKernelResponse)
+  captcha_type:
+    class: CaptchaType
+    tags:
+      - form.type

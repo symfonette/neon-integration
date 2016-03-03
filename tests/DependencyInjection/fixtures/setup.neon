@@ -1,0 +1,6 @@
+services:
+  database:
+    class: Nette\Database\Connection(@bar)
+    setup:
+      - setCacheStorage
+      - $substitutions(%database.substitutions%)

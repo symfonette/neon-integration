@@ -1,0 +1,7 @@
+services:
+    my_mailer:
+        class: Acme\HelloBundle\Mailer
+        arguments:
+            - expr("service('mailer_configuration').getMailerMethod()")
+        calls:
+            - setLogger(expression("service('logger')"))

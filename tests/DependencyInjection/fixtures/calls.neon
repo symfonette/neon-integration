@@ -1,0 +1,6 @@
+services:
+    newsletter_manager:
+        class: NewsletterManager
+        calls:
+            - setMailer(@my_mailer)
+            - enableDebug

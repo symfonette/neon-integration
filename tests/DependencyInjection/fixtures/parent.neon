@@ -1,0 +1,2 @@
+services:
+  newsletter_manager < mail_manager: NewsletterManager

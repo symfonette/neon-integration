@@ -1,0 +1,4 @@
+services:
+  - App\Controller\DefaultController
+  - App\ModelFactory::foo
+  foo:

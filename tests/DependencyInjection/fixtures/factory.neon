@@ -1,0 +1,8 @@
+services:
+  router: App\Http\RouterFactory::createRouter
+  validator: validator_factory:createValidator
+  entity_manager: @doctrine::getManager()
+  translator: App\TranslatorFactory::create('cs')
+  form:
+    class: App\Form
+    factory: App\FormFactory::createForm('registration')

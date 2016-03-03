@@ -1,0 +1,14 @@
+services:
+  translator: App\Translator(...)
+
+  event_dispatcher: App\EventDispatcher(..., true)
+
+  validator:
+    class: App\Validator
+    arguments:
+      - ...
+      - true
+
+  form:
+      class: App\Form
+      factory: App\FormFactory::createForm(..., 'registration')

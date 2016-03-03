@@ -1,0 +1,50 @@
+{
+  "name": "symfonette/neon-integration",
+  "type": "library",
+  "description": "Integrates Nette Neon to Symfony",
+  "keywords": ["symfony","nette","yaml","neon","di"],
+  "homepage": "https://github.com/symfonette/neon-integration",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Martin Hasoň",
+      "email": "martin.hason@gmail.com"
+    },
+    {
+      "name": "Webuni s.r.o.",
+      "homepage": "https://www.webuni.cz"
+    }
+  ],
+  "require": {
+    "php": "^5.5|^7.0",
+    "nette/neon": "^2.2",
+    "symfony/config": "^2.3|^3.0",
+    "symfony/dependency-injection": "^2.3|^3.0"
+  },
+  "require-dev": {
+    "symfony/http-kernel": "^3.0",
+    "symfony/var-dumper": "^3.0",
+    "symfony/expression-language": "^3.0",
+    "nette/di": "@dev",
+    "phpunit/phpunit": "^4.8|^5.0",
+    "fabpot/php-cs-fixer": "^1.11"
+  },
+  "suggest": {
+    "symfony/http-kernel": ""
+  },
+  "autoload": {
+    "psr-4": {
+      "Symfonette\\NeonIntegration\\": "src"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Symfonette\\NeonIntegration\\Tests\\": "tests"
+    }
+  },
+  "extra": {
+    "branch-alias": {
+      "dev-master": "1.0-dev"
+    }
+  }
+}

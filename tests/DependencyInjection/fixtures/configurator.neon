@@ -1,0 +1,4 @@
+services:
+    newsletter_manager:
+        class: NewsletterManager
+        configurator: ['@email_configurator', configure]
