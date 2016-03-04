@@ -53,6 +53,8 @@ class NeonFileLoader extends FileLoader
         'setup' => 'setup', // nette
     ];
 
+    private $anonymousServicesCount;
+
     /**
      * {@inheritdoc}
      */
@@ -84,7 +86,7 @@ class NeonFileLoader extends FileLoader
             }
 
             foreach ($content['parameters'] as $key => $value) {
-                $this->container->setParameter($key, $this->resolveServices($value));
+                $this->container->setParameter($key, $this->resolveServices($value, $path));
             }
         }
 
@@ -202,7 +204,11 @@ class NeonFileLoader extends FileLoader
             throw new InvalidArgumentException(sprintf('The "services" key should contain an array in %s. Check your YAML syntax.', $file));
         }
 
+        $this->anonymousServicesCount = 0;
         foreach ($content['services'] as $id => $service) {
+            if (is_int($id)) {
+                $id = $this->generateAnonymousServiceId($file);
+            }
             $this->parseDefinition($id, $service, $file);
         }
     }
@@ -232,7 +238,7 @@ class NeonFileLoader extends FileLoader
 
         // nette
         if (is_string($service) && false !== strpos($service, ':')) {
-            $service = ['factory' => $this->parseFactory($service)];
+            $service = ['factory' => $this->parseFactory($service, $file)];
         } elseif (is_string($service) && 0 === strpos($service, '@')) {
             $this->container->setAlias($id, substr($service, 1));
 
@@ -324,7 +330,7 @@ class NeonFileLoader extends FileLoader
                 $factory = $factory->value;
             }
 
-            $definition->setFactory($this->parseFactory($factory));
+            $definition->setFactory($this->parseFactory($factory, $file));
         }
 
         if (isset($service['file'])) {
@@ -343,7 +349,7 @@ class NeonFileLoader extends FileLoader
             });
 
             $definition->setAutowired($autowired);
-            $definition->setArguments($this->resolveServices($service['arguments']));
+            $definition->setArguments($this->resolveServices($service['arguments'], $file));
         }
 
         // nette
@@ -369,14 +375,14 @@ class NeonFileLoader extends FileLoader
         }
 
         if (isset($service['properties'])) {
-            $definition->setProperties($this->resolveServices($service['properties']));
+            $definition->setProperties($this->resolveServices($service['properties'], $file));
         }
 
         if (isset($service['configurator'])) {
             if (is_string($service['configurator'])) {
                 $definition->setConfigurator($service['configurator']);
             } else {
-                $definition->setConfigurator([$this->resolveServices($service['configurator'][0]), $service['configurator'][1]]);
+                $definition->setConfigurator([$this->resolveServices($service['configurator'][0], $file), $service['configurator'][1]]);
             }
         }
 
@@ -388,13 +394,13 @@ class NeonFileLoader extends FileLoader
             foreach ($service['calls'] as $call) {
                 if ($call instanceof Entity) { // nette
                     $method = $call->value;
-                    $args = $this->resolveServices($call->attributes);
+                    $args = $this->resolveServices($call->attributes, $file);
                 } elseif (isset($call['method'])) {
                     $method = $call['method'];
-                    $args = isset($call['arguments']) ? $this->resolveServices($call['arguments']) : [];
+                    $args = isset($call['arguments']) ? $this->resolveServices($call['arguments'], $file) : [];
                 } elseif (is_array($call)) {
                     $method = $call[0];
-                    $args = isset($call[1]) ? $this->resolveServices($call[1]) : [];
+                    $args = isset($call[1]) ? $this->resolveServices($call[1], $file) : [];
                 } else { // nette
                     $method = $call;
                     $args = [];
@@ -486,26 +492,26 @@ class NeonFileLoader extends FileLoader
         $this->container->setDefinition($id, $definition);
     }
 
-    private function parseFactory($factory)
+    private function parseFactory($factory, $file)
     {
         if (is_string($factory)) {
             if (strpos($factory, '::') !== false) {
                 $parts = explode('::', $factory, 2);
 
-                return ['@' === $parts[0][0] ? $this->resolveServices($parts[0]) : $parts[0], $parts[1]];
+                return ['@' === $parts[0][0] ? $this->resolveServices($parts[0], $file) : $parts[0], $parts[1]];
             } elseif (strpos($factory, ':') !== false) {
                 $parts = explode(':', $factory, 2);
 
-                return [$this->resolveServices(('@' === $parts[0][0] ?: '@').$parts[0]), $parts[1]];
+                return [$this->resolveServices(('@' === $parts[0][0] ?: '@').$parts[0], $file), $parts[1]];
             } else {
                 return $factory;
             }
         } else {
-            return [$this->resolveServices($factory[0]), $factory[1]];
+            return [$this->resolveServices($factory[0], $file), $factory[1]];
         }
     }
 
-    private function resolveServices($value)
+    private function resolveServices($value, $file)
     {
         // nette
         if ($value instanceof Entity) {
@@ -513,11 +519,17 @@ class NeonFileLoader extends FileLoader
                 return new Expression(reset($value->attributes));
             } elseif (0 === strpos($value->value, '@')) {
                 $value = $value->value;
+            } else {
+                $id = $this->generateAnonymousServiceId($file);
+                $this->parseDefinition($id, $value, $file);
+                $value = new Reference($id);
             }
         }
 
         if (is_array($value)) {
-            $value = array_map([$this, 'resolveServices'], $value);
+            $value = array_map(function ($value) use ($file) {
+                return $this->resolveServices($value, $file);
+            }, $value);
         } elseif (is_string($value) &&  0 === strpos($value, '@=')) {
             return new Expression(substr($value, 2));
         } elseif (is_string($value) &&  0 === strpos($value, '@')) {
@@ -558,6 +570,11 @@ class NeonFileLoader extends FileLoader
 
             $this->container->loadFromExtension($namespace, $values);
         }
+    }
+
+    private function generateAnonymousServiceId($file)
+    {
+        return sprintf('%s_%d', hash('sha256', $file), ++$this->anonymousServicesCount);
     }
 
     private static function checkDefinition($id, array $definition, $file)

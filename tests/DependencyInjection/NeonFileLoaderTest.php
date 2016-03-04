@@ -133,6 +133,20 @@ class NeonFileLoaderTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals([['setLogger', [new Expression("service('logger')")]]], $definition->getMethodCalls());
     }
 
+    public function testAnonymousServices()
+    {
+        $this->loader->load('anonymous.neon');
+
+        $this->assertEquals([
+            '99d710a8540e0f2b2092c6b60fcc54da383299b475aca750f76c29f101fc565f_1',
+            '99d710a8540e0f2b2092c6b60fcc54da383299b475aca750f76c29f101fc565f_2',
+            '99d710a8540e0f2b2092c6b60fcc54da383299b475aca750f76c29f101fc565f_3',
+            'mailer',
+        ], array_keys($this->container->getDefinitions()));
+
+        $this->assertEquals(new Reference('99d710a8540e0f2b2092c6b60fcc54da383299b475aca750f76c29f101fc565f_3'), $this->container->getDefinition('mailer')->getArgument(0));
+    }
+
     public function testYamlCompatibility()
     {
         $this->loader->load('services_complete.neon');

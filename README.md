@@ -195,3 +195,10 @@ services:
         tags:
             - { name: form.type }
 ```
+
+### Anonymous services
+
+```yaml
+services:
+    mailer: Mailer(Zend_Mail_Transport_Smtp('smtp.gmail.com'))
+```
