@@ -15,11 +15,13 @@ namespace Symfonette\NeonIntegration\DependencyInjection;
 use Nette\Neon\Entity;
 use Nette\Neon\Neon;
 use Symfony\Component\Config\Resource\FileResource;
+use Symfony\Component\DependencyInjection\Alias;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\DefinitionDecorator;
 use Symfony\Component\DependencyInjection\Exception\InvalidArgumentException;
 use Symfony\Component\DependencyInjection\Exception\RuntimeException;
+use Symfony\Component\DependencyInjection\Extension\ExtensionInterface;
 use Symfony\Component\DependencyInjection\Loader\FileLoader;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\ExpressionLanguage\Expression;
@@ -130,7 +132,13 @@ class NeonFileLoader extends FileLoader
             }
 
             if (!$this->container->hasExtension($namespace)) {
-                $extensionNamespaces = array_filter(array_map(function ($ext) { return $ext->getAlias(); }, $this->container->getExtensions()));
+                $extensionNamespaces = array_filter(array_map(
+                    function (ExtensionInterface $ext) {
+                        return $ext->getAlias();
+                    },
+                    $this->container->getExtensions()
+                ));
+
                 throw new InvalidArgumentException(sprintf(
                     'There is no extension able to load the configuration for "%s" (in %s). Looked for namespace "%s", found %s',
                     $namespace,
@@ -237,7 +245,7 @@ class NeonFileLoader extends FileLoader
             throw new InvalidArgumentException(sprintf('A service definition must be an array or a string starting with "@" or a NEON entity but %s found for service "%s" in %s. Check your NEON syntax.', gettype($service), $id, $file));
         }
 
-        static::checkDefinition($id, $service, $file);
+        self::checkDefinition($id, $service, $file);
 
         if (isset($service['alias'])) {
             $public = !array_key_exists('public', $service) || (bool) $service['public'];
@@ -526,13 +534,10 @@ class NeonFileLoader extends FileLoader
 
             if ('=' === substr($value, -1)) {
                 $value = substr($value, 0, -1);
-                $strict = false;
-            } else {
-                $strict = true;
             }
 
             if (null !== $invalidBehavior) {
-                $value = new Reference($value, $invalidBehavior, $strict);
+                $value = new Reference($value, $invalidBehavior);
             }
         }
 
@@ -555,18 +560,11 @@ class NeonFileLoader extends FileLoader
         }
     }
 
-    /**
-     * Checks the keywords used to define a service.
-     *
-     * @param string $id         The service name
-     * @param array  $definition The service definition to check
-     * @param string $file       The loaded YAML file
-     */
     private static function checkDefinition($id, array $definition, $file)
     {
         foreach ($definition as $key => $value) {
-            if (!isset(static::$keywords[$key])) {
-                throw new InvalidArgumentException(sprintf('The configuration key "%s" is unsupported for service definition "%s" in "%s". Allowed configuration keys are "%s".', $key, $id, $file, implode('", "', static::$keywords)));
+            if (!isset(self::$keywords[$key])) {
+                throw new InvalidArgumentException(sprintf('The configuration key "%s" is unsupported for service definition "%s" in "%s". Allowed configuration keys are "%s".', $key, $id, $file, implode('", "', self::$keywords)));
             }
         }
     }
