@@ -1,6 +1,11 @@
 Nette Neon for Symfony
 ======================
 
+[![Latest Stable Version](https://poser.pugx.org/symfonette/neon-integration/version)](https://packagist.org/packages/symfonette/neon-integration)
+[![Build Status](https://travis-ci.org/symfonette/neon-integration.svg?branch=master)](https://travis-ci.org/symfonette/neon-integration)
+[![Scrutinizer Code Quality](https://scrutinizer-ci.com/g/symfonette/neon-integration/badges/quality-score.png?b=master)](https://scrutinizer-ci.com/g/symfonette/neon-integration/?branch=master)
+[![SensioLabsInsight](https://insight.sensiolabs.com/projects/1c5b8c0b-b0b8-4dff-a103-1b947294b59d/mini.png)](https://insight.sensiolabs.com/projects/1c5b8c0b-b0b8-4dff-a103-1b947294b59d)
+
 Provides integration for Nette Neon with Symfony Dependency Injection component.
 
 Installation
