@@ -115,10 +115,10 @@ class NeonFileLoader extends FileLoader
             throw new InvalidArgumentException(sprintf('The file "%s" does not contain valid NEON.', $file), 0, $e);
         }
 
-        return $this->validate($configuration, $file);
+        return $this->validateFile($configuration, $file);
     }
 
-    private function validate($content, $file)
+    private function validateFile($content, $file)
     {
         if (null === $content) {
             return $content;
@@ -215,6 +215,84 @@ class NeonFileLoader extends FileLoader
 
     private function parseDefinition($id, $service, $file)
     {
+        if ($this->processService($id, $service, $file)) {
+            return;
+        }
+
+        $this->checkDefinition($id, $service, $file);
+
+        if ($this->processAlias($id, $service, $file)) {
+            return;
+        }
+
+        $definition = isset($service['parent']) ? new DefinitionDecorator($service['parent']) : new Definition();
+
+        $this->processClass($id, $service, $definition, $file);
+
+        if (isset($service['shared'])) {
+            $definition->setShared($service['shared']);
+        }
+
+        if (isset($service['synthetic'])) {
+            $definition->setSynthetic($service['synthetic']);
+        }
+
+        if (isset($service['lazy'])) {
+            $definition->setLazy($service['lazy']);
+        }
+
+        if (isset($service['public'])) {
+            $definition->setPublic($service['public']);
+        }
+
+        if (isset($service['abstract'])) {
+            $definition->setAbstract($service['abstract']);
+        }
+
+        if (array_key_exists('deprecated', $service)) {
+            $definition->setDeprecated(true, $service['deprecated']);
+        }
+
+        $this->processFactory($id, $service, $definition, $file);
+
+        if (isset($service['file'])) {
+            $definition->setFile($service['file']);
+        }
+
+        $this->processArguments($id, $service, $definition, $file);
+
+        // nette
+        $this->processSetup($service);
+
+        if (isset($service['properties'])) {
+            $definition->setProperties($this->resolveServices($service['properties'], $file));
+        }
+
+        if (isset($service['configurator'])) {
+            if (is_string($service['configurator'])) {
+                $definition->setConfigurator($service['configurator']);
+            } else {
+                $definition->setConfigurator([$this->resolveServices($service['configurator'][0], $file), $service['configurator'][1]]);
+            }
+        }
+
+        $this->processCalls($id, $service, $definition, $file);
+        $this->processTags($id, $service, $definition, $file);
+
+        if (isset($service['decorates'])) {
+            $renameId = isset($service['decoration_inner_name']) ? $service['decoration_inner_name'] : null;
+            $priority = isset($service['decoration_priority']) ? $service['decoration_priority'] : 0;
+            $definition->setDecoratedService($service['decorates'], $renameId, $priority);
+        }
+
+        $this->processAutowire($id, $service, $definition, $file);
+        $this->processAutowiringTypes($id, $service, $definition, $file);
+
+        $this->container->setDefinition($id, $definition);
+    }
+
+    private function processService(&$id, &$service, $file)
+    {
         // nette
         if ($service instanceof Entity) {
             $value = $service->value;
@@ -242,217 +320,196 @@ class NeonFileLoader extends FileLoader
         } elseif (is_string($service) && 0 === strpos($service, '@')) {
             $this->container->setAlias($id, substr($service, 1));
 
-            return;
+            return true;
         } elseif (is_string($service)) {
             $service = ['class' => $service];
-        }
-
-        if (!is_array($service)) {
-            throw new InvalidArgumentException(sprintf('A service definition must be an array or a string starting with "@" or a NEON entity but %s found for service "%s" in %s. Check your NEON syntax.', gettype($service), $id, $file));
-        }
-
-        self::checkDefinition($id, $service, $file);
-
-        if (isset($service['alias'])) {
-            $public = !array_key_exists('public', $service) || (bool) $service['public'];
-            $this->container->setAlias($id, new Alias($service['alias'], $public));
-
-            foreach ($service as $key => $value) {
-                if (!in_array($key, ['alias', 'public'])) {
-                    throw new InvalidArgumentException(sprintf('The configuration key "%s" is unsupported for alias definition "%s" in "%s". Allowed configuration keys are "alias" and "public".', $key, $id, $file));
-                }
-            }
-
-            return;
         }
 
         // nette
         if (isset($parent)) {
             $service['parent'] = $parent;
         }
+    }
 
-        if (isset($service['parent'])) {
-            $definition = new DefinitionDecorator($service['parent']);
-        } else {
-            $definition = new Definition();
+    private function processAlias($id, array &$service, $file)
+    {
+        if (!isset($service['alias'])) {
+            return;
         }
 
-        if (isset($service['class'])) {
-            $class = $service['class'];
+        $public = !array_key_exists('public', $service) || (bool) $service['public'];
+        $this->container->setAlias($id, new Alias($service['alias'], $public));
 
-            // nette
-            if ($class instanceof Entity) {
-                if (isset($service['arguments']) && !empty($class->attributes)) {
-                    throw new InvalidArgumentException(sprintf('Duplicated definition of arguments for service "%s" in "%s". Check you NEON syntax.', $id, $file));
-                }
-
-                $service['arguments'] = $class->attributes;
-                $class = $class->value;
+        foreach ($service as $key => $value) {
+            if (!in_array($key, ['alias', 'public'])) {
+                throw new InvalidArgumentException(sprintf('The configuration key "%s" is unsupported for alias definition "%s" in "%s". Allowed configuration keys are "alias" and "public".', $key, $id, $file));
             }
-
-            $definition->setClass($class);
         }
 
-        if (isset($service['shared'])) {
-            $definition->setShared($service['shared']);
+        return true;
+    }
+
+    private function processClass($id, &$service, Definition $definition, $file)
+    {
+        if (!isset($service['class'])) {
+            return;
         }
 
-        if (isset($service['synthetic'])) {
-            $definition->setSynthetic($service['synthetic']);
-        }
-
-        if (isset($service['lazy'])) {
-            $definition->setLazy($service['lazy']);
-        }
-
-        if (isset($service['public'])) {
-            $definition->setPublic($service['public']);
-        }
-
-        if (isset($service['abstract'])) {
-            $definition->setAbstract($service['abstract']);
-        }
-
-        if (array_key_exists('deprecated', $service)) {
-            $definition->setDeprecated(true, $service['deprecated']);
-        }
-
-        if (isset($service['factory'])) {
-            $factory = $service['factory'];
-
-            //nette
-            if ($factory instanceof Entity) {
-                if (isset($service['arguments']) && !empty($factory->attributes)) {
-                    throw new InvalidArgumentException(sprintf('Duplicated definition of arguments for service "%s" in "%s". Check you NEON syntax.', $id, $file));
-                }
-
-                $service['arguments'] = $factory->attributes;
-                $factory = $factory->value;
-            }
-
-            $definition->setFactory($this->parseFactory($factory, $file));
-        }
-
-        if (isset($service['file'])) {
-            $definition->setFile($service['file']);
-        }
-
-        if (isset($service['arguments'])) {
-            $autowired = false;
-            array_walk($service['arguments'], function (&$value) use (&$autowired) {
-                if ('...' === $value) {
-                    $value = '';
-                    $autowired = true;
-                }
-
-                return $value;
-            });
-
-            $definition->setAutowired($autowired);
-            $definition->setArguments($this->resolveServices($service['arguments'], $file));
-        }
+        $class = $service['class'];
 
         // nette
-        if (isset($service['setup'])) {
-            foreach ($service['setup'] as $setup) {
-                if ($setup instanceof Entity) {
-                    $name = $setup->value;
-                    $args = $setup->attributes;
-                } elseif (is_array($setup)) {
-                    $name = $setup[0];
-                    $args = isset($setup[1]) ? $setup[1] : [];
-                } else {
-                    $name = $setup;
-                    $args = [];
-                }
-
-                if ('$' === $name[0]) {
-                    $service['properties'][substr($name, 1)] = $args;
-                } else {
-                    $service['calls'][] = [$name, $args];
-                }
+        if ($class instanceof Entity) {
+            if (isset($service['arguments']) && !empty($class->attributes)) {
+                throw new InvalidArgumentException(sprintf('Duplicated definition of arguments for service "%s" in "%s". Check you NEON syntax.', $id, $file));
             }
+
+            $service['arguments'] = $class->attributes;
+            $class = $class->value;
         }
 
-        if (isset($service['properties'])) {
-            $definition->setProperties($this->resolveServices($service['properties'], $file));
+        $definition->setClass($class);
+    }
+
+    private function processFactory($id, array &$service, Definition $definition, $file)
+    {
+        if (!isset($service['factory'])) {
+            return;
         }
 
-        if (isset($service['configurator'])) {
-            if (is_string($service['configurator'])) {
-                $definition->setConfigurator($service['configurator']);
+        $factory = $service['factory'];
+
+        //nette
+        if ($factory instanceof Entity) {
+            if (isset($service['arguments']) && !empty($factory->attributes)) {
+                throw new InvalidArgumentException(sprintf('Duplicated definition of arguments for service "%s" in "%s". Check you NEON syntax.', $id, $file));
+            }
+
+            $service['arguments'] = $factory->attributes;
+            $factory = $factory->value;
+        }
+
+        $definition->setFactory($this->parseFactory($factory, $file));
+    }
+
+    private function processArguments($id, array &$service, Definition $definition, $file)
+    {
+        if (!isset($service['arguments'])) {
+            return;
+        }
+
+        $autowired = false;
+        array_walk($service['arguments'], function (&$value) use (&$autowired) {
+            if ('...' === $value) {
+                $value = '';
+                $autowired = true;
+            }
+
+            return $value;
+        });
+
+        $definition->setAutowired($autowired);
+        $definition->setArguments($this->resolveServices($service['arguments'], $file));
+    }
+
+    private function processSetup(array &$service)
+    {
+        if (!isset($service['setup'])) {
+            return;
+        }
+
+        foreach ($service['setup'] as $setup) {
+            if ($setup instanceof Entity) {
+                $name = $setup->value;
+                $args = $setup->attributes;
+            } elseif (is_array($setup)) {
+                $name = $setup[0];
+                $args = isset($setup[1]) ? $setup[1] : [];
             } else {
-                $definition->setConfigurator([$this->resolveServices($service['configurator'][0], $file), $service['configurator'][1]]);
+                $name = $setup;
+                $args = [];
+            }
+
+            if ('$' === $name[0]) {
+                $service['properties'][substr($name, 1)] = $args;
+            } else {
+                $service['calls'][] = [$name, $args];
             }
         }
+    }
 
-        if (isset($service['calls'])) {
-            if (!is_array($service['calls'])) {
-                throw new InvalidArgumentException(sprintf('Parameter "calls" must be an array for service "%s" in %s. Check your NEON syntax.', $id, $file));
-            }
-
-            foreach ($service['calls'] as $call) {
-                if ($call instanceof Entity) { // nette
-                    $method = $call->value;
-                    $args = $this->resolveServices($call->attributes, $file);
-                } elseif (isset($call['method'])) {
-                    $method = $call['method'];
-                    $args = isset($call['arguments']) ? $this->resolveServices($call['arguments'], $file) : [];
-                } elseif (is_array($call)) {
-                    $method = $call[0];
-                    $args = isset($call[1]) ? $this->resolveServices($call[1], $file) : [];
-                } else { // nette
-                    $method = $call;
-                    $args = [];
-                }
-
-                $definition->addMethodCall($method, $args);
-            }
+    private function processCalls($id, array &$service, Definition $definition, $file)
+    {
+        if (!isset($service['calls'])) {
+            return;
         }
 
-        if (isset($service['tags'])) {
-            if (!is_array($service['tags'])) {
-                throw new InvalidArgumentException(sprintf('Parameter "tags" must be an array for service "%s" in %s. Check your NEON syntax.', $id, $file));
-            }
-
-            foreach ($service['tags'] as $tag) {
-                if ($tag instanceof Entity) {
-                    $tag = ['name' => $tag->value] + $tag->attributes;
-                } elseif (is_string($tag)) {
-                    $tag = ['name' => $tag];
-                }
-
-                if (!is_array($tag)) {
-                    throw new InvalidArgumentException(sprintf('A "tags" entry must be an array for service "%s" in %s. Check your NEON syntax.', $id, $file));
-                }
-
-                if (!isset($tag['name'])) {
-                    throw new InvalidArgumentException(sprintf('A "tags" entry is missing a "name" key for service "%s" in %s.', $id, $file));
-                }
-
-                if (!is_string($tag['name']) || '' === $tag['name']) {
-                    throw new InvalidArgumentException(sprintf('The tag name for service "%s" in %s must be a non-empty string.', $id, $file));
-                }
-
-                $name = $tag['name'];
-                unset($tag['name']);
-
-                foreach ($tag as $attribute => $value) {
-                    if (!is_scalar($value) && null !== $value) {
-                        throw new InvalidArgumentException(sprintf('A "tags" attribute must be of a scalar-type for service "%s", tag "%s", attribute "%s" in %s. Check your NEON syntax.', $id, $name, $attribute, $file));
-                    }
-                }
-
-                $definition->addTag($name, $tag);
-            }
+        if (!is_array($service['calls'])) {
+            throw new InvalidArgumentException(sprintf('Parameter "calls" must be an array for service "%s" in %s. Check your NEON syntax.', $id, $file));
         }
 
-        if (isset($service['decorates'])) {
-            $renameId = isset($service['decoration_inner_name']) ? $service['decoration_inner_name'] : null;
-            $priority = isset($service['decoration_priority']) ? $service['decoration_priority'] : 0;
-            $definition->setDecoratedService($service['decorates'], $renameId, $priority);
+        foreach ($service['calls'] as $call) {
+            if ($call instanceof Entity) { // nette
+                $method = $call->value;
+                $args = $this->resolveServices($call->attributes, $file);
+            } elseif (isset($call['method'])) {
+                $method = $call['method'];
+                $args = isset($call['arguments']) ? $this->resolveServices($call['arguments'], $file) : [];
+            } elseif (is_array($call)) {
+                $method = $call[0];
+                $args = isset($call[1]) ? $this->resolveServices($call[1], $file) : [];
+            } else { // nette
+                $method = $call;
+                $args = [];
+            }
+
+            $definition->addMethodCall($method, $args);
+        }
+    }
+
+    private function processTags($id, array &$service, Definition $definition, $file)
+    {
+        if (!isset($service['tags'])) {
+            return;
         }
 
+        if (!is_array($service['tags'])) {
+            throw new InvalidArgumentException(sprintf('Parameter "tags" must be an array for service "%s" in %s. Check your NEON syntax.', $id, $file));
+        }
+
+        foreach ($service['tags'] as $tag) {
+            if ($tag instanceof Entity) {
+                $tag = ['name' => $tag->value] + $tag->attributes;
+            } elseif (is_string($tag)) {
+                $tag = ['name' => $tag];
+            }
+
+            if (!is_array($tag)) {
+                throw new InvalidArgumentException(sprintf('A "tags" entry must be an array for service "%s" in %s. Check your NEON syntax.', $id, $file));
+            }
+
+            if (!isset($tag['name'])) {
+                throw new InvalidArgumentException(sprintf('A "tags" entry is missing a "name" key for service "%s" in %s.', $id, $file));
+            }
+
+            if (!is_string($tag['name']) || '' === $tag['name']) {
+                throw new InvalidArgumentException(sprintf('The tag name for service "%s" in %s must be a non-empty string.', $id, $file));
+            }
+
+            $name = $tag['name'];
+            unset($tag['name']);
+
+            foreach ($tag as $attribute => $value) {
+                if (!is_scalar($value) && null !== $value) {
+                    throw new InvalidArgumentException(sprintf('A "tags" attribute must be of a scalar-type for service "%s", tag "%s", attribute "%s" in %s. Check your NEON syntax.', $id, $name, $attribute, $file));
+                }
+            }
+
+            $definition->addTag($name, $tag);
+        }
+    }
+
+    private function processAutowire($id, array &$service, Definition $definition, $file)
+    {
         // nette
         if (isset($service['autowired'])) {
             if (isset($service['autowire']) && $service['autowire'] !== $service['autowired']) {
@@ -470,26 +527,29 @@ class NeonFileLoader extends FileLoader
 
             $definition->setAutowired($service['autowire']);
         }
+    }
 
-        if (isset($service['autowiring_types'])) {
-            if (is_string($service['autowiring_types'])) {
-                $definition->addAutowiringType($service['autowiring_types']);
-            } else {
-                if (!is_array($service['autowiring_types'])) {
-                    throw new InvalidArgumentException(sprintf('Parameter "autowiring_types" must be a string or an array for service "%s" in %s. Check your NEON syntax.', $id, $file));
-                }
-
-                foreach ($service['autowiring_types'] as $autowiringType) {
-                    if (!is_string($autowiringType)) {
-                        throw new InvalidArgumentException(sprintf('A "autowiring_types" attribute must be of type string for service "%s" in %s. Check your NEON syntax.', $id, $file));
-                    }
-
-                    $definition->addAutowiringType($autowiringType);
-                }
-            }
+    private function processAutowiringTypes($id, array &$service, Definition $definition, $file)
+    {
+        if (!isset($service['autowiring_types'])) {
+            return;
         }
 
-        $this->container->setDefinition($id, $definition);
+        if (is_string($service['autowiring_types'])) {
+            $definition->addAutowiringType($service['autowiring_types']);
+        } else {
+            if (!is_array($service['autowiring_types'])) {
+                throw new InvalidArgumentException(sprintf('Parameter "autowiring_types" must be a string or an array for service "%s" in %s. Check your NEON syntax.', $id, $file));
+            }
+
+            foreach ($service['autowiring_types'] as $autowiringType) {
+                if (!is_string($autowiringType)) {
+                    throw new InvalidArgumentException(sprintf('A "autowiring_types" attribute must be of type string for service "%s" in %s. Check your NEON syntax.', $id, $file));
+                }
+
+                $definition->addAutowiringType($autowiringType);
+            }
+        }
     }
 
     private function parseFactory($factory, $file)
@@ -577,8 +637,12 @@ class NeonFileLoader extends FileLoader
         return sprintf('%s_%d', hash('sha256', $file), ++$this->anonymousServicesCount);
     }
 
-    private static function checkDefinition($id, array $definition, $file)
+    private function checkDefinition($id, array $definition, $file)
     {
+        if (!is_array($definition)) {
+            throw new InvalidArgumentException(sprintf('A service definition must be an array or a string starting with "@" or a NEON entity but %s found for service "%s" in %s. Check your NEON syntax.', gettype($definition), $id, $file));
+        }
+
         foreach ($definition as $key => $value) {
             if (!isset(self::$keywords[$key])) {
                 throw new InvalidArgumentException(sprintf('The configuration key "%s" is unsupported for service definition "%s" in "%s". Allowed configuration keys are "%s".', $key, $id, $file, implode('", "', self::$keywords)));
