@@ -13,12 +13,12 @@
 namespace Symfonette\NeonIntegration\HttpKernel;
 
 use Symfonette\NeonIntegration\DependencyInjection\NeonFileLoader;
-use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpKernel\Config\FileLocator;
 
 trait NeonContainerLoaderTrait
 {
-    protected function getContainerLoader(ContainerBuilder $container)
+    protected function getContainerLoader(ContainerInterface $container)
     {
         /* @var $loader \Symfony\Component\Config\Loader\Loader */
         $loader = parent::getContainerLoader($container);
