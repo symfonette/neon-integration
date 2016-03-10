@@ -129,7 +129,7 @@ class NeonFileLoader extends FileLoader
         }
 
         foreach ($content as $namespace => $data) {
-            if (in_array($namespace, ['imports', 'parameters', 'services'])) {
+            if (in_array($namespace, ['imports', 'includes', 'parameters', 'services'])) {
                 continue;
             }
 

@@ -42,6 +42,18 @@ class AppKernel extends Kernel
 Usages
 ------
 
+### Includes
+
+```yaml
+# simplified syntax
+includes:
+    - parameters.yml
+    
+# standard YAML syntax
+imports:
+    - resource: parameters.yml
+```
+
 ### Services configuration in NEON
 
 #### Class

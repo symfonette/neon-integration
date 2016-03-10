@@ -147,6 +147,12 @@ class NeonFileLoaderTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals(new Reference('99d710a8540e0f2b2092c6b60fcc54da383299b475aca750f76c29f101fc565f_3'), $this->container->getDefinition('mailer')->getArgument(0));
     }
 
+    public function testIncludes()
+    {
+        $this->loader->load('includes.neon');
+        $this->assertEquals(['authenticator', 'slave_entity_manager'], array_keys($this->container->getDefinitions()));
+    }
+
     public function testYamlCompatibility()
     {
         $this->loader->load('services_complete.neon');
