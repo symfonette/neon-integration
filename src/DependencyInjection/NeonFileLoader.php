@@ -561,19 +561,17 @@ class NeonFileLoader extends FileLoader
             return [$this->resolveServices($factory[0], $file), $factory[1]];
         }
 
-        if (strpos($factory, '::') !== false) {
-            $parts = explode('::', $factory, 2);
-
-            return ['@' === $parts[0][0] ? $this->resolveServices($parts[0], $file) : $parts[0], $parts[1]];
+        if (false === strpos($factory, ':')) {
+            return $factory;
         }
 
-        if (strpos($factory, ':') !== false) {
-            $parts = explode(':', $factory, 2);
+        $parts = explode(':', $factory, 2);
 
-            return [$this->resolveServices(('@' === $parts[0][0] ?: '@').$parts[0], $file), $parts[1]];
+        if (':' === $parts[1][0]) {
+            return ['@' === $parts[0][0] ? $this->resolveServices($parts[0], $file) : $parts[0], substr($parts[1], 1)];
         }
 
-        return $factory;
+        return [$this->resolveServices(('@' === $parts[0][0] ?: '@').$parts[0], $file), $parts[1]];
     }
 
     private function resolveServices($value, $file)
