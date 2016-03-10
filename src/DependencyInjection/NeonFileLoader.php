@@ -259,7 +259,7 @@ class NeonFileLoader extends FileLoader
             $definition->setFile($service['file']);
         }
 
-        $this->processArguments($id, $service, $definition, $file);
+        $this->processArguments($service, $definition, $file);
 
         // nette
         $this->processSetup($service);
@@ -391,7 +391,7 @@ class NeonFileLoader extends FileLoader
         $definition->setFactory($this->parseFactory($factory, $file));
     }
 
-    private function processArguments($id, array &$service, Definition $definition, $file)
+    private function processArguments(array &$service, Definition $definition, $file)
     {
         if (!isset($service['arguments'])) {
             return;
@@ -479,7 +479,9 @@ class NeonFileLoader extends FileLoader
         foreach ($service['tags'] as $tag) {
             if ($tag instanceof Entity) {
                 $tag = ['name' => $tag->value] + $tag->attributes;
-            } elseif (is_string($tag)) {
+            }
+
+            if (is_string($tag)) {
                 $tag = ['name' => $tag];
             }
 
@@ -537,38 +539,41 @@ class NeonFileLoader extends FileLoader
 
         if (is_string($service['autowiring_types'])) {
             $definition->addAutowiringType($service['autowiring_types']);
-        } else {
-            if (!is_array($service['autowiring_types'])) {
-                throw new InvalidArgumentException(sprintf('Parameter "autowiring_types" must be a string or an array for service "%s" in %s. Check your NEON syntax.', $id, $file));
+            return;
+        }
+
+        if (!is_array($service['autowiring_types'])) {
+            throw new InvalidArgumentException(sprintf('Parameter "autowiring_types" must be a string or an array for service "%s" in %s. Check your NEON syntax.', $id, $file));
+        }
+
+        foreach ($service['autowiring_types'] as $autowiringType) {
+            if (!is_string($autowiringType)) {
+                throw new InvalidArgumentException(sprintf('A "autowiring_types" attribute must be of type string for service "%s" in %s. Check your NEON syntax.', $id, $file));
             }
 
-            foreach ($service['autowiring_types'] as $autowiringType) {
-                if (!is_string($autowiringType)) {
-                    throw new InvalidArgumentException(sprintf('A "autowiring_types" attribute must be of type string for service "%s" in %s. Check your NEON syntax.', $id, $file));
-                }
-
-                $definition->addAutowiringType($autowiringType);
-            }
+            $definition->addAutowiringType($autowiringType);
         }
     }
 
     private function parseFactory($factory, $file)
     {
-        if (is_string($factory)) {
-            if (strpos($factory, '::') !== false) {
-                $parts = explode('::', $factory, 2);
-
-                return ['@' === $parts[0][0] ? $this->resolveServices($parts[0], $file) : $parts[0], $parts[1]];
-            } elseif (strpos($factory, ':') !== false) {
-                $parts = explode(':', $factory, 2);
-
-                return [$this->resolveServices(('@' === $parts[0][0] ?: '@').$parts[0], $file), $parts[1]];
-            } else {
-                return $factory;
-            }
-        } else {
+        if (!is_string($factory)) {
             return [$this->resolveServices($factory[0], $file), $factory[1]];
         }
+
+        if (strpos($factory, '::') !== false) {
+            $parts = explode('::', $factory, 2);
+
+            return ['@' === $parts[0][0] ? $this->resolveServices($parts[0], $file) : $parts[0], $parts[1]];
+        }
+
+        if (strpos($factory, ':') !== false) {
+            $parts = explode(':', $factory, 2);
+
+            return [$this->resolveServices(('@' === $parts[0][0] ?: '@').$parts[0], $file), $parts[1]];
+        }
+
+        return $factory;
     }
 
     private function resolveServices($value, $file)
