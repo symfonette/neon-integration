@@ -60,7 +60,7 @@ class NeonFileLoader extends FileLoader
      */
     public function supports($resource, $type = null)
     {
-        return is_string($resource) && 'neon' === pathinfo($resource, PATHINFO_EXTENSION) && (!$type || 'neon' === $type);
+        return is_string($resource) && 'neon' === pathinfo($resource, PATHINFO_EXTENSION) && (null === $type || 'neon' === $type);
     }
 
     /**
@@ -161,36 +161,23 @@ class NeonFileLoader extends FileLoader
             return;
         }
 
-        // nette
-        if (isset($content['imports']) && isset($content['includes'])) {
-            throw new InvalidArgumentException('The "imports" and "includes" keys cannot be used together. Checkyour NEON syntax.', $file);
-        }
-
-        if (isset($content['imports']) && !is_array($content['imports'])) {
-            throw new InvalidArgumentException(sprintf('The "imports" key should contain an array in %s. Check your NEON syntax.', $file));
-        }
-
-        // nette
-        if (isset($content['includes']) && !is_array($content['includes'])) {
-            throw new InvalidArgumentException(sprintf('The "includes" key should contain an array in %s. Check your NEON syntax.', $file));
+        foreach (['imports', 'includes'] as $key) {
+            if (isset($content[$key]) && !is_array($content[$key])) {
+                throw new InvalidArgumentException(sprintf('The "%s" key should contain an array in %s. Check your NEON syntax.', $key, $file));
+            }
         }
 
         // nette
         $content = array_merge(['imports' => [], 'includes' => []], $content);
+        $imports = array_merge($content['imports'], $content['includes']);
 
-        foreach ($content['imports'] as $import) {
-            if (!is_array($import)) {
-                throw new InvalidArgumentException(sprintf('The values in the "imports" key should be arrays in %s. Check your NEON syntax.', $file));
+        foreach ($imports as $import) {
+            $this->setCurrentDir(dirname($file));
+            if (is_array($import)) {
+                $this->import($import['resource'], null, isset($import['ignore_errors']) ? (bool) $import['ignore_errors'] : false, $file);
+            } else {
+                $this->import($import, null, false, $file); // nette
             }
-
-            $this->setCurrentDir(dirname($file));
-            $this->import($import['resource'], null, isset($import['ignore_errors']) ? (bool) $import['ignore_errors'] : false, $file);
-        }
-
-        // nette
-        foreach ($content['includes'] as $include) {
-            $this->setCurrentDir(dirname($file));
-            $this->import($include, null, false, $file);
         }
     }
 
